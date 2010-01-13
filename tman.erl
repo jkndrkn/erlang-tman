@@ -7,7 +7,7 @@
 -define(CYCLES_DEFAULT, 50).
 -define(SIZE, 30).
 
--record(node, {id, x, y, random_nodes=[], structured_nodes=[]}).
+-record(node, {id, x, y, neighbors=[]}).
 
 init() ->
     init(?NODES_DEFAULT, ?DEGREE_DEFAULT, ?CYCLES_DEFAULT, ?SIZE).
@@ -15,20 +15,43 @@ init() ->
 init(Nodes, Degree, Cycles, Size) ->
     main(Nodes, Degree, Cycles, Size).
 
-main(Nodes, Degree, Cycles, Size) ->
-    io:format("Running T-Man with NODES ~w of DEGREE  ~w over CYCLES ~w in space of SIZE ~w ~n", 
-	      [Nodes, Degree, Cycles, Size]).
+main(NodeNumber, Degree, Cycles, Size) ->
+    io:format("# Running T-Man with NODES ~w of DEGREE  ~w over CYCLES ~w in space of SIZE ~w ~n",
+	      [NodeNumber, Degree, Cycles, Size]),
+    Nodes = init_nodes(NodeNumber, Degree, Size),
+    Nodes.
 
 init_nodes(NodeNumber, Degree, Size) ->
-    init_nodes(NodeNumber, Degree, Size, []).
+    init_nodes(NodeNumber, Degree, Size, [], [], NodeNumber).
 
-init_nodes(0, Degree, _, Nodes) ->
+init_nodes(0, Degree, _, Nodes, _, _) ->
     init_nodes_neighbors(Nodes, Degree);
-init_nodes(NodeNumber, Degree, Size, Nodes) ->
-    init_nodes(NodeNumber - 1, Degree, Size, [#node{id=NodeNumber,x=1,y=2}|Nodes]).  
+init_nodes(NodeNumber, Degree, Size, Nodes, Coordinates, NodesTotal) ->
+    [[X,Y],CoordinatesNew] = generate_random_unique_coordinate(NodesTotal, Size, Coordinates),
+    init_nodes(NodeNumber - 1, Degree, Size, [#node{id=NodeNumber,x=X,y=Y}|Nodes], CoordinatesNew, NodesTotal).
 
 init_nodes_neighbors(Nodes, Degree) ->
-    [Nodes, Degree].
+    init_nodes_neighbors(Nodes, Degree, length(Nodes), []).
+
+init_nodes_neighbors([], _, _, NodesOutput) ->
+    NodesOutput;
+init_nodes_neighbors([Node|NodesInput], Degree, NodeNumber, NodesOutput) ->
+    Neighbors = generate_neighbors(Node#node.id, NodeNumber, Degree),
+    init_nodes_neighbors(NodesInput, Degree, NodeNumber, [Node#node{neighbors=Neighbors}|NodesOutput]).
+
+generate_neighbors(_, NodeNumber, Degree) when Degree > NodeNumber ->
+    exit(degree_too_high);
+generate_neighbors(ThisNode, NodeNumber, Degree) ->
+    generate_neighbors(ThisNode, NodeNumber, Degree, []).
+
+generate_neighbors(_, _, 0, Neighbors) ->
+    Neighbors;
+generate_neighbors(ThisNode, NodeNumber, Degree, Neighbors) ->
+    Neighbor = random:uniform(NodeNumber),
+    case ThisNode =:= Neighbor of
+	true -> generate_neighbors(ThisNode, NodeNumber, Degree, Neighbors);
+	false -> generate_neighbors(ThisNode, NodeNumber, Degree - 1, [Neighbor|Neighbors])
+    end.
 
 generate_random_unique_coordinate(NodeNumber, Size, _) when (NodeNumber > Size * Size) ->
     exit(too_many_nodes);
@@ -52,3 +75,10 @@ coordinate_is_unique(Coord, Coordinates) ->
 
 node_distance(N1, N2) ->
     abs(N1#node.x - N2#node.x) + abs(N1#node.y - N2#node.y).
+
+print_nodes_pretty([]) ->
+    true;
+print_nodes_pretty([Node|Nodes]) ->
+    io:format("~w~n", [Node]),
+    print_nodes_pretty(Nodes).
+    
