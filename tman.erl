@@ -94,5 +94,61 @@ neighbor_distance(Nodes, Node) ->
     lists:sum(NodeDistances).
 
 node_lookup(Nodes, NodeId) ->
-    {_, Node} = lists:keysearch(NodeId, 2, Nodes),
-    Node.
+    tman_keyfind(NodeId, 2, Nodes).
+
+tman_keyfind(Key, N, TupleList) ->
+    {value, Tuple} = lists:keysearch(Key, N, TupleList),
+    Tuple.
+
+select_peer(NeighborIds) ->
+    lists:min(NeighborIds).
+
+merge_view(View1, View2) ->
+    S1 = sets:from_list(View1),
+    S2 = sets:from_list(View2),
+    S3 = sets:union(S1, S2),
+    Merge_Viewd = sets:to_list(S3),
+    lists:sort(Merge_Viewd).
+
+evolve_node(Node,Nodes,Degree) ->
+    Descriptor = Node#node.id,
+    View = Node#node.neighbors,
+    Peer = node_lookup(Nodes, select_peer(View)),
+    RandomView = random_view(Descriptor, Nodes, Degree),
+    Buffer = merge_view(Descriptor, merge_view(View, RandomView)),
+    {PeerUpdated, BufferPeer} = evolve_peer(Nodes,Degree,Peer,Buffer),
+    ViewNew = select_view(merge_view(BufferPeer,View), Degree),
+    NodeUpdated = Node#node{neighbors=ViewNew},
+    update_nodes(Nodes, [NodeUpdated, PeerUpdated]).
+
+evolve_peer(Nodes,Degree,Peer,BufferRemote) ->
+    Descriptor = Peer#node.id,
+    View = Peer#node.neighbors,
+    RandomView = random_view(Descriptor, Nodes, Degree),
+    BufferLocal = merge_view(Descriptor, merge_view(View, RandomView)),
+    ViewNew = select_view(merge_view(BufferRemote,View), Degree),
+    {Peer#node{neighbors=ViewNew}, BufferLocal}.
+
+% XXX Finish this function
+select_view(View, Degree) ->
+    lists:sublist(lists:sort(View), Degree).
+
+% XXX Finish this function
+update_nodes(Nodes, Node) ->
+    Nodes.
+
+random_view(Node, Nodes, Degree) ->
+    random_view(Node, Nodes, Degree, []).
+
+random_view(_, _, Degree, View) when Degree =:= length(View) ->
+    View;
+random_view(Node, Nodes, Degree, View) ->
+    NodeRandom = select_random_node(Nodes),
+    case lists:member(NodeRandom, [Node|View]) of
+	true -> random_view(Node, Nodes, Degree, View);
+	false -> random_view(Node, Nodes, Degree, [NodeRandom|View])
+    end.
+
+select_random_node(Nodes) ->
+    Node = lists:nth(random:uniform(length(Nodes)), Nodes),
+    Node#node.id.
