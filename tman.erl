@@ -74,7 +74,10 @@ coordinate_is_unique(Coord, Coordinates) ->
     not lists:member(Coord, Coordinates).
 
 node_distance(N1, N2) ->
-    abs(N1#node.x - N2#node.x) + abs(N1#node.y - N2#node.y).
+    manhattan_distance(N1#node.x, N2#node.x, N1#node.y, N2#node.y).
+
+manhattan_distance(X1, Y1, X2, Y2) ->
+    abs(X1 - X2) + abs(Y1 - Y2).
 
 print_nodes_pretty([]) ->
     true;
@@ -82,3 +85,14 @@ print_nodes_pretty([Node|Nodes]) ->
     io:format("~w~n", [Node]),
     print_nodes_pretty(Nodes).
     
+sum_of_distances(Nodes) ->
+    lists:sum([neighbor_distance(Nodes, N) || N <- Nodes]).
+
+neighbor_distance(Nodes, Node) ->
+    NeighborIds = Node#node.neighbors,
+    NodeDistances = [node_distance(Node, node_lookup(Nodes, NeighborId)) || NeighborId <- NeighborIds],
+    lists:sum(NodeDistances).
+
+node_lookup(Nodes, NodeId) ->
+    {_, Node} = lists:keysearch(NodeId, 2, Nodes),
+    Node.
