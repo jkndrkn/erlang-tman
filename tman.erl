@@ -5,31 +5,37 @@
 -include("tman.hrl").
 
 init() ->
-    init(?NODES_DEFAULT, ?DEGREE_DEFAULT, ?CYCLES_DEFAULT, ?SIZE).
+    init(?NODES_DEFAULT, ?DEGREE_DEFAULT, ?CYCLES_DEFAULT, ?SIZE_DEFAULT).
+
+init(Nodes, Degree) ->
+    main(Nodes, Degree, ?CYCLES_DEFAULT, ?SIZE_DEFAULT).
 
 init(Nodes, Degree, Cycles, Size) ->
     main(Nodes, Degree, Cycles, Size).
 
 main(NodeNumber, Degree, Cycles, Size) ->
-    io:format("# Running T-Man with NODES ~w of DEGREE  ~w over CYCLES ~w in space of SIZE ~w ~n",
+    io:format("# Running T-Man with NODES ~w of DEGREE  ~w over CYCLES ~w in space of SIZE ~w ~n~n",
 	      [NodeNumber, Degree, Cycles, Size]),
+    io:format("# Iteration Distance~n"),
     Nodes = init_nodes(NodeNumber, Degree, Size),
     evolve(Nodes, Degree, Cycles, Size).
 
 evolve(Nodes, Degree, Cycles, Size) ->
-    evolve(Nodes, Degree, Cycles, Size, 0).
+    evolve(Nodes, Degree, Cycles, Size, 1).
 
-evolve(Nodes, _, Cycles, _, Iteration) when Iteration >= Cycles ->
+evolve(Nodes, _, Cycles, _, Iteration) when Iteration > Cycles ->
     Nodes;
 evolve(Nodes, Degree, Cycles, Size, Iteration) ->
     NodesEvolved = evolve_nodes(Nodes, Degree),
     NodesUpdated = update_nodes(Nodes, NodesEvolved),
+    Distance = sum_of_distances(Nodes),
+    io:format("~w ~w~n", [Iteration, Distance]),
     evolve(NodesUpdated, Degree, Cycles, Size, Iteration + 1).
-					 
 
 init_nodes(NodeNumber, Degree, Size) ->
     init_nodes(NodeNumber, Degree, Size, [], [], NodeNumber).
 
+% TODO: Modify system to use an array of Nodes rather than a list in an effort to improve performancex
 init_nodes(0, Degree, _, Nodes, _, _) ->
     init_nodes_neighbors(Nodes, Degree);
 init_nodes(NodeNumber, Degree, Size, Nodes, Coordinates, NodesTotal) ->
@@ -117,7 +123,7 @@ sort_view(Node, Nodes, View) ->
 node_sort_by_distance(Node, Nodes, N1, N2) ->
     D1 = node_distance(Node, node_lookup(Nodes, N1)),
     D2 = node_distance(Node, node_lookup(Nodes, N2)),
-    %io:format("N1: ~w ~w N2: ~w ~w~n", [N1, D1, N2, D2]),
+    ?TRACE("N1: ~w ~w N2: ~w ~w~n", [N1, D1, N2, D2]),
     D1 =< D2.    
 
 merge_view(View1, View2) ->
@@ -152,9 +158,13 @@ evolve_nodes(Nodes, Degree) ->
 select_view(Node, Nodes, View, Degree) ->
     lists:sublist(sort_view(Node, Nodes, View), Degree).
 
-% XXX Finish this function
-update_nodes(Nodes, NodesUpdated) ->
-    Nodes.
+update_nodes(Nodes, []) ->
+    Nodes;
+update_nodes(Nodes, [NodeUpdated|NodesUpdated]) ->
+    update_nodes(update_node(Nodes, NodeUpdated), NodesUpdated).
+
+update_node(Nodes, Node) ->
+    lists:keyreplace(Node#node.id, 2, Nodes, Node).
 
 random_view(_, Nodes, Degree) when Degree >= length(Nodes) ->
     exit(nodes_list_too_large);
