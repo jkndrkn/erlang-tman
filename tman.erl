@@ -2,12 +2,7 @@
 %-export([init/0, init/2]).
 -compile(export_all).
 
--define(NODES_DEFAULT, 900).
--define(DEGREE_DEFAULT, 20).
--define(CYCLES_DEFAULT, 50).
--define(SIZE, 30).
-
--record(node, {id, x, y, neighbors=[]}).
+-include("tman.hrl").
 
 init() ->
     init(?NODES_DEFAULT, ?DEGREE_DEFAULT, ?CYCLES_DEFAULT, ?SIZE).
@@ -19,7 +14,18 @@ main(NodeNumber, Degree, Cycles, Size) ->
     io:format("# Running T-Man with NODES ~w of DEGREE  ~w over CYCLES ~w in space of SIZE ~w ~n",
 	      [NodeNumber, Degree, Cycles, Size]),
     Nodes = init_nodes(NodeNumber, Degree, Size),
-    Nodes.
+    evolve(Nodes, Degree, Cycles, Size).
+
+evolve(Nodes, Degree, Cycles, Size) ->
+    evolve(Nodes, Degree, Cycles, Size, 0).
+
+evolve(Nodes, _, Cycles, _, Iteration) when Iteration >= Cycles ->
+    Nodes;
+evolve(Nodes, Degree, Cycles, Size, Iteration) ->
+    NodesEvolved = evolve_nodes(Nodes, Degree),
+    NodesUpdated = update_nodes(Nodes, NodesEvolved),
+    evolve(NodesUpdated, Degree, Cycles, Size, Iteration + 1).
+					 
 
 init_nodes(NodeNumber, Degree, Size) ->
     init_nodes(NodeNumber, Degree, Size, [], [], NodeNumber).
@@ -76,7 +82,7 @@ coordinate_is_unique(Coord, Coordinates) ->
 node_distance(N1, N2) ->
     manhattan_distance(N1#node.x, N2#node.x, N1#node.y, N2#node.y).
 
-manhattan_distance(X1, Y1, X2, Y2) ->
+manhattan_distance(X1, X2, Y1, Y2) ->
     abs(X1 - X2) + abs(Y1 - Y2).
 
 print_nodes_pretty([]) ->
@@ -100,43 +106,58 @@ tman_keyfind(Key, N, TupleList) ->
     {value, Tuple} = lists:keysearch(Key, N, TupleList),
     Tuple.
 
-select_peer(NeighborIds) ->
-    lists:min(NeighborIds).
+select_peer(Node, Nodes, NeighborIds) ->
+    [Peer|_] = sort_view(Node, Nodes, NeighborIds),
+    Peer.
+
+sort_view(Node, Nodes, View) ->
+    SortFun = fun(N1, N2) -> node_sort_by_distance(Node, Nodes, N1, N2) end,
+    lists:sort(SortFun, View).
+
+node_sort_by_distance(Node, Nodes, N1, N2) ->
+    D1 = node_distance(Node, node_lookup(Nodes, N1)),
+    D2 = node_distance(Node, node_lookup(Nodes, N2)),
+    %io:format("N1: ~w ~w N2: ~w ~w~n", [N1, D1, N2, D2]),
+    D1 =< D2.    
 
 merge_view(View1, View2) ->
     S1 = sets:from_list(View1),
     S2 = sets:from_list(View2),
     S3 = sets:union(S1, S2),
-    Merge_Viewd = sets:to_list(S3),
-    lists:sort(Merge_Viewd).
+    MergeView = sets:to_list(S3),
+    lists:sort(MergeView).
 
 evolve_node(Node,Nodes,Degree) ->
-    Descriptor = Node#node.id,
     View = Node#node.neighbors,
-    Peer = node_lookup(Nodes, select_peer(View)),
+    Peer = node_lookup(Nodes, select_peer(Node, Nodes, View)),
+    Descriptor = Node#node.id,
     RandomView = random_view(Descriptor, Nodes, Degree),
-    Buffer = merge_view(Descriptor, merge_view(View, RandomView)),
+    Buffer = merge_view([Descriptor], merge_view(View, RandomView)),
     {PeerUpdated, BufferPeer} = evolve_peer(Nodes,Degree,Peer,Buffer),
-    ViewNew = select_view(merge_view(BufferPeer,View), Degree),
+    ViewNew = select_view(Node, Nodes, merge_view(BufferPeer,View), Degree),
     NodeUpdated = Node#node{neighbors=ViewNew},
-    update_nodes(Nodes, [NodeUpdated, PeerUpdated]).
+    [NodeUpdated, PeerUpdated].
 
 evolve_peer(Nodes,Degree,Peer,BufferRemote) ->
     Descriptor = Peer#node.id,
     View = Peer#node.neighbors,
     RandomView = random_view(Descriptor, Nodes, Degree),
-    BufferLocal = merge_view(Descriptor, merge_view(View, RandomView)),
-    ViewNew = select_view(merge_view(BufferRemote,View), Degree),
+    BufferLocal = merge_view([Descriptor], merge_view(View, RandomView)),
+    ViewNew = select_view(Peer, Nodes, merge_view(BufferRemote,View), Degree),
     {Peer#node{neighbors=ViewNew}, BufferLocal}.
 
-% XXX Finish this function
-select_view(View, Degree) ->
-    lists:sublist(lists:sort(View), Degree).
+evolve_nodes(Nodes, Degree) ->
+    lists:flatten([evolve_node(Node, Nodes, Degree) || Node <- Nodes]).
+
+select_view(Node, Nodes, View, Degree) ->
+    lists:sublist(sort_view(Node, Nodes, View), Degree).
 
 % XXX Finish this function
-update_nodes(Nodes, Node) ->
+update_nodes(Nodes, NodesUpdated) ->
     Nodes.
 
+random_view(_, Nodes, Degree) when Degree >= length(Nodes) ->
+    exit(nodes_list_too_large);
 random_view(Node, Nodes, Degree) ->
     random_view(Node, Nodes, Degree, []).
 
