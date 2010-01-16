@@ -1,2 +1,5 @@
 *.beam
 *~
+*.png
+*.dat
+*.swp
