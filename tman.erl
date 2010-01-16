@@ -18,7 +18,11 @@ main(NodeNumber, Degree, Cycles, Size) ->
 	      [NodeNumber, Degree, Cycles, Size]),
     io:format("# Iteration Distance~n"),
     Nodes = init_nodes(NodeNumber, Degree, Size),
-    evolve(Nodes, Degree, Cycles, Size).
+    TimeStart = time_microseconds(),
+    evolve(Nodes, Degree, Cycles, Size),
+    TimeEnd = time_microseconds(),
+    TimeElapsed = TimeEnd - TimeStart,
+    io:format("# TimeElapsed: ~w sec~n", [TimeElapsed / 1000000.0]).
 
 evolve(Nodes, Degree, Cycles, Size) ->
     evolve(Nodes, Degree, Cycles, Size, 1).
@@ -33,23 +37,26 @@ evolve(Nodes, Degree, Cycles, Size, Iteration) ->
     evolve(NodesUpdated, Degree, Cycles, Size, Iteration + 1).
 
 init_nodes(NodeNumber, Degree, Size) ->
-    init_nodes(NodeNumber, Degree, Size, [], [], NodeNumber).
+    init_nodes(NodeNumber, Degree, Size, array:new(NodeNumber), [], NodeNumber).
 
-% TODO: Modify system to use an array of Nodes rather than a list in an effort to improve performancex
-init_nodes(0, Degree, _, Nodes, _, _) ->
-    init_nodes_neighbors(Nodes, Degree);
+init_nodes(0, Degree, _, Nodes, _, NodesTotal) ->
+    init_nodes_neighbors(Nodes, Degree, NodesTotal);
 init_nodes(NodeNumber, Degree, Size, Nodes, Coordinates, NodesTotal) ->
     [[X,Y],CoordinatesNew] = generate_random_unique_coordinate(NodesTotal, Size, Coordinates),
-    init_nodes(NodeNumber - 1, Degree, Size, [#node{id=NodeNumber,x=X,y=Y}|Nodes], CoordinatesNew, NodesTotal).
+    Node = #node{id=NodeNumber,x=X,y=Y},
+    NodeNumberNew = NodeNumber - 1,
+    init_nodes(NodeNumberNew, Degree, Size, array:set(NodeNumberNew, Node, Nodes), CoordinatesNew, NodesTotal).
 
-init_nodes_neighbors(Nodes, Degree) ->
-    init_nodes_neighbors(Nodes, Degree, length(Nodes), []).
+init_nodes_neighbors(Nodes, Degree, NodesTotal) ->
+    init_nodes_neighbors(Nodes, Degree, NodesTotal, array:new(NodesTotal), 0).
 
-init_nodes_neighbors([], _, _, NodesOutput) ->
+init_nodes_neighbors(_, _, NodeNumber, NodesOutput, Index) when Index >= NodeNumber ->
     NodesOutput;
-init_nodes_neighbors([Node|NodesInput], Degree, NodeNumber, NodesOutput) ->
+init_nodes_neighbors(NodesInput, Degree, NodeNumber, NodesOutput, Index) ->
+    Node = array:get(Index, NodesInput),
     Neighbors = generate_neighbors(Node#node.id, NodeNumber, Degree),
-    init_nodes_neighbors(NodesInput, Degree, NodeNumber, [Node#node{neighbors=Neighbors}|NodesOutput]).
+    NodeUpdated = Node#node{neighbors=Neighbors},
+    init_nodes_neighbors(NodesInput, Degree, NodeNumber, array:set(Index, NodeUpdated, NodesOutput), Index + 1).
 
 generate_neighbors(_, NodeNumber, Degree) when Degree > NodeNumber ->
     exit(degree_too_high);
@@ -98,7 +105,8 @@ print_nodes_pretty([Node|Nodes]) ->
     print_nodes_pretty(Nodes).
     
 sum_of_distances(Nodes) ->
-    lists:sum([neighbor_distance(Nodes, N) || N <- Nodes]).
+    Sum = fun(_, Val, Acc) -> neighbor_distance(Nodes, Val) + Acc end,
+    array:foldl(Sum, 0, Nodes).
 
 neighbor_distance(Nodes, Node) ->
     NeighborIds = Node#node.neighbors,
@@ -106,11 +114,7 @@ neighbor_distance(Nodes, Node) ->
     lists:sum(NodeDistances).
 
 node_lookup(Nodes, NodeId) ->
-    tman_keyfind(NodeId, 2, Nodes).
-
-tman_keyfind(Key, N, TupleList) ->
-    {value, Tuple} = lists:keysearch(Key, N, TupleList),
-    Tuple.
+    array:get(NodeId - 1, Nodes).
 
 select_peer(Node, Nodes, NeighborIds) ->
     [Peer|_] = sort_view(Node, Nodes, NeighborIds),
@@ -123,7 +127,6 @@ sort_view(Node, Nodes, View) ->
 node_sort_by_distance(Node, Nodes, N1, N2) ->
     D1 = node_distance(Node, node_lookup(Nodes, N1)),
     D2 = node_distance(Node, node_lookup(Nodes, N2)),
-    ?TRACE("N1: ~w ~w N2: ~w ~w~n", [N1, D1, N2, D2]),
     D1 =< D2.    
 
 merge_view(View1, View2) ->
@@ -153,7 +156,14 @@ evolve_peer(Nodes,Degree,Peer,BufferRemote) ->
     {Peer#node{neighbors=ViewNew}, BufferLocal}.
 
 evolve_nodes(Nodes, Degree) ->
-    lists:flatten([evolve_node(Node, Nodes, Degree) || Node <- Nodes]).
+    lists:flatten(evolve_nodes(Nodes, Degree, array:size(Nodes), [], 0)).
+
+evolve_nodes(_, _, NodesNumber, NodesOutput, Index) when Index >= NodesNumber ->
+    NodesOutput;
+evolve_nodes(Nodes, Degree, NodesNumber, NodesOutput, Index) ->
+    Node = array:get(Index, Nodes),
+    NodeEvolved = evolve_node(Node, Nodes, Degree),
+    evolve_nodes(Nodes, Degree, NodesNumber, [NodeEvolved|NodesOutput], Index + 1).
 
 select_view(Node, Nodes, View, Degree) ->
     lists:sublist(sort_view(Node, Nodes, View), Degree).
@@ -164,22 +174,33 @@ update_nodes(Nodes, [NodeUpdated|NodesUpdated]) ->
     update_nodes(update_node(Nodes, NodeUpdated), NodesUpdated).
 
 update_node(Nodes, Node) ->
-    lists:keyreplace(Node#node.id, 2, Nodes, Node).
+    array:set(Node#node.id - 1, Node, Nodes).
 
-random_view(_, Nodes, Degree) when Degree >= length(Nodes) ->
+random_view(NodeId, Nodes, Degree) ->
+    random_view(NodeId, Nodes, Degree, array:size(Nodes)).
+
+random_view(_, _, Degree, NodesNumber) when Degree >= NodesNumber ->
     exit(nodes_list_too_large);
-random_view(Node, Nodes, Degree) ->
-    random_view(Node, Nodes, Degree, []).
+random_view(NodeId, Nodes, Degree, NodesNumber) ->
+    random_view(NodeId, Nodes, Degree, NodesNumber, []).
 
-random_view(_, _, Degree, View) when Degree =:= length(View) ->
-    View;
-random_view(Node, Nodes, Degree, View) ->
-    NodeRandom = select_random_node(Nodes),
-    case lists:member(NodeRandom, [Node|View]) of
-	true -> random_view(Node, Nodes, Degree, View);
-	false -> random_view(Node, Nodes, Degree, [NodeRandom|View])
-    end.
+random_view(_, _, Degree, _, View) when Degree =:= length(View) ->
+     View;
+random_view(NodeId, Nodes, Degree, NodesNumber, View) ->
+     NodeRandom = select_random_node(Nodes),
+     NodeInvalid = lists:member(NodeRandom, [NodeId|View]),
+     case NodeInvalid of
+	 true -> random_view(NodeId, Nodes, Degree, NodesNumber, View);
+         false -> random_view(NodeId, Nodes, Degree, NodesNumber, [NodeRandom|View])
+     end.
 
 select_random_node(Nodes) ->
-    Node = lists:nth(random:uniform(length(Nodes)), Nodes),
-    Node#node.id.
+    random:uniform(array:size(Nodes)).
+
+init_test_vals() ->
+    Nodes = init_nodes(4, 2, 4),
+    [node_lookup(Nodes, 1), Nodes].
+
+time_microseconds() ->
+    {MS, S, US} = now(),
+    (MS * 1.0e+12) + (S * 1.0e+6) + US.
