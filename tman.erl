@@ -5,36 +5,61 @@
 -include("tman.hrl").
 
 init() ->
-    init(?NODES_DEFAULT, ?DEGREE_DEFAULT, ?CYCLES_DEFAULT, ?SIZE_DEFAULT).
+    main(?NODES_DEFAULT, ?DEGREE_DEFAULT, ?CYCLES_DEFAULT, ?SIZE_DEFAULT, false).
 
 init(Nodes, Degree) ->
-    main(Nodes, Degree, ?CYCLES_DEFAULT, ?SIZE_DEFAULT).
+    main(Nodes, Degree, ?CYCLES_DEFAULT, ?SIZE_DEFAULT, false).
 
-init(Nodes, Degree, Cycles, Size) ->
-    main(Nodes, Degree, Cycles, Size).
+init(Nodes, Degree, Cycles, Size, GraphOutput) ->
+    main(Nodes, Degree, Cycles, Size, GraphOutput).
 
-main(NodeNumber, Degree, Cycles, Size) ->
+main(NodeNumber, Degree, Cycles, Size, GraphOutput) ->
     io:format("# Running T-Man with NODES ~w of DEGREE  ~w over CYCLES ~w in space of SIZE ~w ~n~n",
 	      [NodeNumber, Degree, Cycles, Size]),
     io:format("# Iteration Distance~n"),
     Nodes = init_nodes(NodeNumber, Degree, Size),
     TimeStart = time_microseconds(),
-    evolve(Nodes, Degree, Cycles, Size),
+    evolve(Nodes, Degree, Cycles, Size, GraphOutput),
     TimeEnd = time_microseconds(),
     TimeElapsed = TimeEnd - TimeStart,
     io:format("# TimeElapsed: ~w sec~n", [TimeElapsed / 1000000.0]).
 
-evolve(Nodes, Degree, Cycles, Size) ->
-    evolve(Nodes, Degree, Cycles, Size, 1).
+graph_output(_, _, _, false) ->
+    ok;
+graph_output(Nodes, Cycle, Size, true) ->
+    Fun = fun(_, N, Acc) -> string:concat(Acc, graph_node(Nodes, N, Size)) end,
+    Dimensions =  [?OUTPUT_DIMENSIONS, ?OUTPUT_DIMENSIONS],
+    Graph = array:foldl(Fun, "", Nodes),
+    ImagickFormat = "#!/bin/bash~nconvert -size ~wx~w xc:white -fill white -stroke black \\~n~s    ~s",
+    Filename = io_lib:format("~s/~w.sh", [?GRAPH_DIRECTORY, Cycle]),
+    Imagename = io_lib:format("~w.gif", [Cycle]),
+    ImagickData = io_lib:format(ImagickFormat, Dimensions ++ [Graph, Imagename]),
+    {ok, File} = file:open(Filename, write),
+    io:format(File, "~s", [ImagickData]).
 
-evolve(Nodes, _, Cycles, _, Iteration) when Iteration > Cycles ->
+graph_node(Nodes, Node, Size) ->
+    Neighbors = Node#node.neighbors,
+    NeighborsSublist = lists:sublist(sort_view(Node, Nodes, Neighbors), ?GRAPH_NEIGHBORS),
+    lists:flatten([imagick_format(Node, node_lookup(Nodes, Neighbor), Size) || Neighbor <- NeighborsSublist]).
+
+imagick_format(Node, Neighbor, Size) ->
+    EdgeCoords = [Node#node.x, Node#node.y, Neighbor#node.x, Neighbor#node.y],
+    ScalingFactor = ?OUTPUT_DIMENSIONS / Size,
+    EdgeCoordsScaled = [round(X * ScalingFactor) || X <- EdgeCoords],
+    io_lib:format("    -draw \"line ~w,~w ~w,~w\" \\~n", EdgeCoordsScaled).
+
+evolve(Nodes, Degree, Cycles, Size, GraphOutput) ->
+    evolve(Nodes, Degree, Cycles, Size, GraphOutput, 1).
+
+evolve(Nodes, _, Cycles, _, _, Iteration) when Iteration > Cycles ->
     Nodes;
-evolve(Nodes, Degree, Cycles, Size, Iteration) ->
+evolve(Nodes, Degree, Cycles, Size, GraphOutput, Iteration) ->
+    graph_output(Nodes, Iteration, Size, GraphOutput),
     NodesEvolved = evolve_nodes(Nodes, Degree),
     NodesUpdated = update_nodes(Nodes, NodesEvolved),
     Distance = sum_of_distances(Nodes),
     io:format("~w ~w~n", [Iteration, Distance]),
-    evolve(NodesUpdated, Degree, Cycles, Size, Iteration + 1).
+    evolve(NodesUpdated, Degree, Cycles, Size, GraphOutput, Iteration + 1).
 
 init_nodes(NodeNumber, Degree, Size) ->
     init_nodes(NodeNumber, Degree, Size, array:new(NodeNumber), [], NodeNumber).
@@ -67,7 +92,7 @@ generate_neighbors(_, _, 0, Neighbors) ->
     Neighbors;
 generate_neighbors(ThisNode, NodeNumber, Degree, Neighbors) ->
     Neighbor = random:uniform(NodeNumber),
-    case ThisNode =:= Neighbor of
+    case lists:member(Neighbor, [ThisNode|Neighbors]) of
 	true -> generate_neighbors(ThisNode, NodeNumber, Degree, Neighbors);
 	false -> generate_neighbors(ThisNode, NodeNumber, Degree - 1, [Neighbor|Neighbors])
     end.
