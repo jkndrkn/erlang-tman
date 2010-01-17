@@ -1,2 +1,2 @@
 clean:
-	rm -rf *.beam *~ 
+	rm -rf *.beam *~ *.png graphs/*.sh graphs/*.gif
