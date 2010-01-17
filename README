@@ -4,19 +4,23 @@ EEL 6935 Distributed Computing Spring 2010
 
 Usage:
 
-1. Start the Erlang shell.
+1. Unpack the archive eriksen_hw1.tar file in the eriksen home directory of the faraday.acis.ufl.edu.
+
+2. cd into the directory eriksen_hw1.
+
+3. Start the Erlang shell.
 $ erl
 
-2. Compile the source code.
+4. Compile the source code.
 > c(tman).
 
-3. Run the T-Man algorithm with parameters Nodes = 900, Neighbors = 20, Cycles = 50, Size = 30 x 30.
+5. Run the T-Man algorithm with parameters Nodes = 900, Neighbors = 20, Cycles = 50, Size = 30 x 30.
 > tman:init().
 
-4. Run the T-Man algorithm user-specified nodes N and neighbors k
+6. Run the T-Man algorithm user-specified nodes N and neighbors k
 > tman:init(N,k).
 
-5. Exit the Erlang shell.
+7. Exit the Erlang shell.
 > q().
 
 File Listing:
