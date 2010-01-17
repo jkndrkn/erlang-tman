@@ -1,0 +1,7 @@
+John David Eriksen
+john.eriksen@yahoo.com
+EEL 6935 Distributed Computing Spring 2010
+
+The implementation of the T-Man algorithm contained in the file tman.erl was able to successfully build a network with a sum of distances substantially lower than that of a purely random system (see plot-1.png and distances.dat).  The most dramatic changes happened in the first five generations, with only a very gradual improvement in sum of distances occurring after that interval.
+
+Extra Credit: These results are illustrated graphically in a series of image renderings of the mesh network (see GIF images in graphs directory). Note how the long and chaotic edges in the first generation gradually yield to a nearly perfectly converged grid-like mesh in subsequent generations. 
