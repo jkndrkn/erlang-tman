@@ -3,7 +3,7 @@
 
 -include("tman.hrl").
 
-% Executes T-Man algorithm with default parameters per Note 4
+% Executes T-Man algorithm with default specified in tman.hrl
 init() ->
     main(?NODES_DEFAULT,?DEGREE_DEFAULT,?CYCLES_DEFAULT,?SIZE_DEFAULT,false).
 
@@ -78,7 +78,7 @@ evolve(Nodes,Degree,Cycles,Size,GraphOutput,Iteration) ->
     % Update the node list using NodesEvolved
     NodesUpdated = update_nodes(Nodes,NodesEvolved),
 
-    % Distance is the computed sum_of_distances per Note 3
+    % Distance is the computed sum_of_distances
     Distance = sum_of_distances(Nodes),
     io:format("~w ~w~n",[Iteration,Distance]),
     evolve(NodesUpdated,Degree,Cycles,Size,GraphOutput,Iteration + 1).
@@ -156,7 +156,7 @@ node_distance(N1,N2) ->
 manhattan_distance(X1,X2,Y1,Y2) ->
     abs(X1 - X2) + abs(Y1 - Y2).
 
-% Return the sum of distances of the Nodes array per Note 3    
+% Return the sum of distances of the Nodes array
 sum_of_distances(Nodes) ->
     Sum = fun(_,Val,Acc) -> neighbor_distance(Nodes,Val) + Acc end,
     array:foldl(Sum,0,Nodes).
